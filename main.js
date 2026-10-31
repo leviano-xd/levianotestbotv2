@@ -9,6 +9,7 @@ const {
     jidDecode,
     downloadContentFromMessage,
     getContentType,
+    fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
 const config = require('./config');
 const events = require('./leviano');
@@ -159,6 +160,13 @@ function setupAutoRestart(socket, number) {
             const isNormalError = statusCode === 408 || (errorMessage && errorMessage.includes('QR refs attempts ended'));
             if (isNormalError) { levianoLog(`Normal closure for ${number}, no restart needed.`, 'info'); return; }
 
+            if (socket.authState && !socket.authState.creds.registered) {
+                levianoLog(`Pairing not finished for ${number}; waiting for user to enter the code.`, 'warning');
+                activeSockets.delete(number.replace(/[^0-9]/g, ''));
+                socketCreationTime.delete(number.replace(/[^0-9]/g, ''));
+                return;
+            }
+
             if (restartAttempts < maxRestartAttempts) {
                 restartAttempts++;
                 levianoLog(`Reconnecting ${number} (${restartAttempts}/${maxRestartAttempts}) in 10s...`, 'warning');
@@ -223,6 +231,7 @@ async function levianoPair(number, res = null) {
 
         const levianoStore = createarslanStore();
 
+        const { version: waVersion } = await fetchLatestBaileysVersion();
         const conn = makeWASocket({
             auth: {
                 creds: state.creds,
@@ -230,7 +239,7 @@ async function levianoPair(number, res = null) {
             },
             printQRInTerminal: false,
             logger: pino({ level: "silent" }),
-            version: [2, 3000, 1033105955],
+            version: waVersion,
             connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 0,
             keepAliveIntervalMs: 10000,
@@ -239,7 +248,7 @@ async function levianoPair(number, res = null) {
             generateHighQualityLinkPreview: true,
             syncFullHistory: true,
             markOnlineOnConnect: true,
-            browser: ['Mac OS', 'Safari', '10.15.7'],
+            browser: Browsers.ubuntu('Chrome'),
             getMessage: async (key) => {
                 const msg = await levianoStore.loadMessage(key.remoteJid, key.id);
                 return msg && msg.message ? msg.message : { conversation: 'LEVIANO-XD' };
