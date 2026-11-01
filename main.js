@@ -354,6 +354,18 @@ async function levianoPair(number, res = null) {
                 let mek = msg.messages[0];
                 if (!mek.message) return;
 
+                // Ignore the bot's own outgoing messages unless they are commands.
+                // Without this, every reply the bot sends is processed again and
+                // the bot keeps replying to itself (spam loop).
+                {
+                    const rawText = mek.message.conversation
+                        || mek.message.extendedTextMessage?.text
+                        || mek.message.imageMessage?.caption
+                        || mek.message.videoMessage?.caption
+                        || '';
+                    if (mek.key && mek.key.fromMe && !rawText.startsWith(config.PREFIX)) return;
+                }
+
                 const userConfig = await getUserConfigFromMongoDB(number);
 
                 mek.message = (getContentType(mek.message) === 'ephemeralMessage')
